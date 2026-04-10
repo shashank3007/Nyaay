@@ -62,6 +62,7 @@ export interface Database {
           is_premium?: boolean
           updated_at?: string
         }
+        Relationships: []
       }
       conversations: {
         Row: {
@@ -93,6 +94,7 @@ export interface Database {
           summary?: string | null
           updated_at?: string
         }
+        Relationships: []
       }
       messages: {
         Row: {
@@ -127,6 +129,7 @@ export interface Database {
           intent?: string | null
           tokens_used?: number | null
         }
+        Relationships: []
       }
       documents: {
         Row: {
@@ -164,6 +167,7 @@ export interface Database {
           language?: SupportedLanguage
           updated_at?: string
         }
+        Relationships: []
       }
     }
     Views: { [_ in never]: never }
