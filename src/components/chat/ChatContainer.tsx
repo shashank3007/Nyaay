@@ -1,47 +1,60 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useCallback } from 'react'
 import { useChatStore } from '@/stores/chatStore'
 import { useUserStore } from '@/stores/userStore'
+import { useVoiceRecorder } from '@/hooks/useVoiceRecorder'
+import { useSpeechSynthesis } from '@/hooks/useSpeechSynthesis'
 import { MessageList } from './MessageList'
 import { ChatInput } from './ChatInput'
 
 export function ChatContainer() {
-  const { messages, isStreaming, isRecording, isTranscribing, sendMessage, setIsRecording } =
-    useChatStore()
+  const { messages, isStreaming, sendMessage } = useChatStore()
   const { user, preferences } = useUserStore()
-  const [transcript, setTranscript] = useState('')
 
-  // Voice toggle — in Step 6 this will wire to the real useVoiceRecorder hook.
-  // For now it's a stub that toggles state so the UI is functional.
-  function handleVoiceToggle() {
+  const { speak, stop: stopSpeaking, isSpeaking } = useSpeechSynthesis()
+
+  const {
+    transcript,
+    interimTranscript,
+    isRecording,
+    isTranscribing,
+    startRecording,
+    stopRecording,
+    clearTranscript,
+  } = useVoiceRecorder(preferences.language)
+
+  async function handleVoiceToggle() {
     if (isRecording) {
-      setIsRecording(false)
+      stopRecording()
     } else {
-      setIsRecording(true)
+      await startRecording()
     }
   }
 
   function handleTranscriptConfirm(text: string) {
-    setTranscript('')
+    clearTranscript()
     handleSend(text)
   }
 
   function handleTranscriptDiscard() {
-    setTranscript('')
-    setIsRecording(false)
+    clearTranscript()
+    stopRecording()
   }
 
   const handleSend = useCallback(
     async (text: string) => {
       if (!user) return
+      // Stop any ongoing TTS before sending
+      if (isSpeaking) stopSpeaking()
+
       await sendMessage({
         content: text,
         language: preferences.language,
         userId: user.id,
       })
     },
-    [user, preferences.language, sendMessage]
+    [user, preferences.language, sendMessage, isSpeaking, stopSpeaking]
   )
 
   const handleSelectPrompt = useCallback(
@@ -49,22 +62,28 @@ export function ChatContainer() {
     [handleSend]
   )
 
+  // The combined transcript (final + interim) shown while recording
+  const liveTranscript = transcript + (interimTranscript ? ` ${interimTranscript}` : '')
+
   return (
     <div className="flex flex-col h-full" style={{ backgroundColor: '#FFFBF5' }}>
-      {/* Message list (fills available height) */}
+      {/* Message list */}
       <MessageList
         messages={messages}
         language={preferences.language}
         onSelectPrompt={handleSelectPrompt}
+        onSpeakMessage={(text) => speak(text, preferences.language)}
+        isSpeaking={isSpeaking}
+        onStopSpeaking={stopSpeaking}
       />
 
-      {/* Input area (always at bottom) */}
+      {/* Input area */}
       <ChatInput
         onSend={handleSend}
         isStreaming={isStreaming}
         isRecording={isRecording}
         isTranscribing={isTranscribing}
-        transcript={transcript}
+        transcript={isRecording ? liveTranscript : transcript}
         onVoiceToggle={handleVoiceToggle}
         onTranscriptConfirm={handleTranscriptConfirm}
         onTranscriptDiscard={handleTranscriptDiscard}

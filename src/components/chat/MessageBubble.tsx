@@ -1,14 +1,17 @@
 'use client'
 
+import { Volume2, VolumeX } from 'lucide-react'
 import { formatRelativeTime } from '@/lib/utils'
 import type { Message } from '@/types'
 
 interface MessageBubbleProps {
   message: Message
+  onSpeak: (text: string) => void
+  isSpeaking: boolean
+  onStopSpeaking: () => void
 }
 
 function renderContent(content: string): React.ReactNode {
-  // Split on double newlines for paragraphs, single for line breaks
   const paragraphs = content.split(/\n{2,}/)
   return paragraphs.map((para, pi) => (
     <p key={pi} className={pi > 0 ? 'mt-3' : ''}>
@@ -22,7 +25,7 @@ function renderContent(content: string): React.ReactNode {
   ))
 }
 
-export function MessageBubble({ message }: MessageBubbleProps) {
+export function MessageBubble({ message, onSpeak, isSpeaking, onStopSpeaking }: MessageBubbleProps) {
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
 
@@ -46,8 +49,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   if (isAssistant) {
     const isEmpty = !message.content && message.isStreaming
+
     return (
-      <div className="flex items-start gap-3 px-4 py-1">
+      <div className="flex items-start gap-3 px-4 py-1 group">
         <div
           className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0 mt-1"
           style={{ backgroundColor: '#2C5530' }}
@@ -60,7 +64,6 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             style={{ backgroundColor: '#FFFFFF', border: '1px solid #E5E7EB', color: '#1A1A1A' }}
           >
             {isEmpty ? (
-              // Empty placeholder while first tokens arrive — show TypingIndicator dots inline
               <span className="flex gap-1 py-0.5">
                 {[0, 1, 2].map((i) => (
                   <span
@@ -76,12 +79,26 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               </span>
             )}
           </div>
-          {!message.isStreaming && message.created_at && (
-            <span className="text-xs px-1" style={{ color: '#9CA3AF' }}>
-              {formatRelativeTime(message.created_at)}
-              {message.tokens_used ? ` · ${message.tokens_used} tokens` : ''}
-            </span>
+
+          {/* Footer: timestamp + TTS button */}
+          {!message.isStreaming && message.content && (
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-xs" style={{ color: '#9CA3AF' }}>
+                {formatRelativeTime(message.created_at)}
+                {message.tokens_used ? ` · ${message.tokens_used} tokens` : ''}
+              </span>
+              {/* TTS toggle — visible on hover */}
+              <button
+                onClick={() => (isSpeaking ? onStopSpeaking() : onSpeak(message.content))}
+                className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-lg"
+                style={{ color: isSpeaking ? '#2C5530' : '#9CA3AF' }}
+                aria-label={isSpeaking ? 'Stop reading' : 'Read aloud'}
+              >
+                {isSpeaking ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+              </button>
+            </div>
           )}
+
           {message.error && (
             <p className="text-xs px-1" style={{ color: '#EF4444' }}>
               {message.error}

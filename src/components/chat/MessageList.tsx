@@ -9,13 +9,23 @@ interface MessageListProps {
   messages: Message[]
   language: SupportedLanguage
   onSelectPrompt: (text: string) => void
+  onSpeakMessage: (text: string) => void
+  isSpeaking: boolean
+  onStopSpeaking: () => void
 }
 
-export function MessageList({ messages, language, onSelectPrompt }: MessageListProps) {
+export function MessageList({
+  messages,
+  language,
+  onSelectPrompt,
+  onSpeakMessage,
+  isSpeaking,
+  onStopSpeaking,
+}: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll to bottom whenever messages change
+  // Auto-scroll whenever messages update
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
@@ -34,7 +44,12 @@ export function MessageList({ messages, language, onSelectPrompt }: MessageListP
     <div ref={containerRef} className="flex-1 overflow-y-auto py-3">
       {visibleMessages.map((message) => (
         <div key={message.id} className="message-enter">
-          <MessageBubble message={message} />
+          <MessageBubble
+            message={message}
+            onSpeak={onSpeakMessage}
+            isSpeaking={isSpeaking}
+            onStopSpeaking={onStopSpeaking}
+          />
         </div>
       ))}
       <div ref={bottomRef} className="h-1" aria-hidden />
