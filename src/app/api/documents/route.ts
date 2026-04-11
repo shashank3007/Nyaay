@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { renderToBuffer } = require('@react-pdf/renderer') as { renderToBuffer: (el: unknown) => Promise<Buffer> }
 import { getDocumentTemplate } from '@/lib/documents/templates'
 import type { DocumentType, SupportedLanguage } from '@/types'
 import { DOCUMENT_TYPE_CONFIG } from '@/types'
@@ -25,19 +23,24 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // Dynamic import so ESM-only @react-pdf/renderer is loaded at runtime by Node
+    const { renderToBuffer } = await import('@react-pdf/renderer') as {
+      renderToBuffer: (el: unknown) => Promise<Buffer>
+    }
+
     const element = getDocumentTemplate(type, data)
     const buffer = await renderToBuffer(element)
     // Buffer → Uint8Array so NextResponse accepts it as BodyInit
-    const body = new Uint8Array(buffer)
+    const bytes = new Uint8Array(buffer)
 
     const config = DOCUMENT_TYPE_CONFIG[type]
     const filename = `nyaay-${type.toLowerCase().replace(/_/g, '-')}.pdf`
 
-    return new NextResponse(body, {
+    return new NextResponse(bytes, {
       headers: {
         'Content-Type': 'application/pdf',
         'Content-Disposition': `attachment; filename="${filename}"`,
-        'Content-Length': body.byteLength.toString(),
+        'Content-Length': bytes.byteLength.toString(),
         'X-Document-Type': config.label,
       },
     })
