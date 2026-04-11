@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // react-pdf uses Node.js-only APIs in server routes — keep it external
+  serverExternalPackages: ['@react-pdf/renderer'],
 };
 
 export default nextConfig;
