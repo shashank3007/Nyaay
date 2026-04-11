@@ -1,33 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAnthropicClient, DEFAULT_MODEL, MAX_TOKENS } from '@/lib/anthropic/client'
 import { buildSystemPrompt } from '@/lib/anthropic/systemPrompt'
+import { detectDomain, detectIntent } from '@/lib/anthropic/detect'
 import { createClient as createServerClient } from '@/lib/supabase/server'
-import type { SupportedLanguage, LegalDomain, MessageIntent } from '@/types'
+import type { SupportedLanguage } from '@/types'
 import type Anthropic from '@anthropic-ai/sdk'
-
-// ── Domain detection from assistant response ──────────────────
-function detectDomain(text: string): LegalDomain {
-  const t = text.toLowerCase()
-  if (/\brent\b|tenant|landlord|evict|lease|deposit/.test(t)) return 'TENANT'
-  if (/labour|labor|employee|employer|salary|overtime|dismiss|posh|wage/.test(t)) return 'LABOR'
-  if (/domestic.violence|498.?a|dv act|shelter.home|\u092e\u0939\u093f\u0932\u093e|\u0918\u0930\u0947\u0932\u0942/.test(t)) return 'DOMESTIC_VIOLENCE'
-  if (/consumer|refund|defective|product|ecommerce|ncdrc/.test(t)) return 'CONSUMER'
-  if (/property|land|rera|registry|title|deed|mutation/.test(t)) return 'PROPERTY'
-  if (/\bfir\b|police|criminal|bail|arrest|ipc|bnss|section.302/.test(t)) return 'CRIMINAL'
-  if (/divorce|marriage|custody|maintenance|alimony|family/.test(t)) return 'FAMILY'
-  return 'OTHER'
-}
-
-// ── Intent detection from user message ─────────────────────
-function detectIntent(message: string): MessageIntent {
-  const m = message.toLowerCase()
-  if (/\bgenerate|draft|create|write\b|notice|rti|complaint\b|application/.test(m)) return 'DOCUMENT_REQUEST'
-  if (/\bhello\b|hi\b|namaste|\u0928\u092e\u0938\u094d\u0924\u0947|vanakkam|namaskar/.test(m)) return 'GREETING'
-  if (/\?|what\b|how\b|when\b|where\b|why\b|can i|should i|\u0915\u094d\u092f\u093e|\u0915\u0948\u0938\u0947|\u0915\u092c/.test(m)) return 'QUERY'
-  if (/\bmore|explain|clarify|elaborate|tell me/.test(m)) return 'CLARIFICATION'
-  if (m.length < 20) return 'FOLLOW_UP'
-  return 'QUERY'
-}
 
 export async function POST(req: NextRequest) {
   if (!process.env.ANTHROPIC_API_KEY) {
