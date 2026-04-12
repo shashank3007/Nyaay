@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { rateLimit, getRequestIdentifier } from '@/lib/rateLimit'
 
 // BCP-47 locale tags accepted by Whisper
 const WHISPER_LANG: Record<string, string> = {
@@ -9,7 +10,21 @@ const WHISPER_LANG: Record<string, string> = {
   bn: 'bn',
 }
 
+// 10 transcription requests per minute per IP
+const TRANSCRIBE_RATE_LIMIT = { limit: 10, windowSec: 60 }
+
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(`transcribe:${getRequestIdentifier(req)}`, TRANSCRIBE_RATE_LIMIT)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait before transcribing again.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+      }
+    )
+  }
+
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) {
     return NextResponse.json(

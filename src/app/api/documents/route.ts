@@ -1,9 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getDocumentTemplate } from '@/lib/documents/templates'
+import { rateLimit, getRequestIdentifier } from '@/lib/rateLimit'
 import type { DocumentType, SupportedLanguage } from '@/types'
 import { DOCUMENT_TYPE_CONFIG } from '@/types'
 
+// 30 document generations per hour per IP
+const DOCS_RATE_LIMIT = { limit: 30, windowSec: 3600 }
+
 export async function POST(req: NextRequest) {
+  const rl = rateLimit(`documents:${getRequestIdentifier(req)}`, DOCS_RATE_LIMIT)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Document generation limit reached. Please try again later.' },
+      {
+        status: 429,
+        headers: { 'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)) },
+      }
+    )
+  }
+
   let body: {
     type: DocumentType
     data: Record<string, string>

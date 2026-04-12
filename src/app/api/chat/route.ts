@@ -3,10 +3,31 @@ import { getAnthropicClient, DEFAULT_MODEL, MAX_TOKENS } from '@/lib/anthropic/c
 import { buildSystemPrompt } from '@/lib/anthropic/systemPrompt'
 import { detectDomain, detectIntent } from '@/lib/anthropic/detect'
 import { createClient as createServerClient } from '@/lib/supabase/server'
+import { rateLimit, getRequestIdentifier } from '@/lib/rateLimit'
 import type { SupportedLanguage } from '@/types'
 import type Anthropic from '@anthropic-ai/sdk'
 
+// 20 requests per minute per IP
+const CHAT_RATE_LIMIT = { limit: 20, windowSec: 60 }
+
 export async function POST(req: NextRequest) {
+  // Rate limiting
+  const id = getRequestIdentifier(req)
+  const rl = rateLimit(`chat:${id}`, CHAT_RATE_LIMIT)
+  if (!rl.success) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please wait a moment before trying again.' },
+      {
+        status: 429,
+        headers: {
+          'Retry-After': String(Math.ceil((rl.resetAt - Date.now()) / 1000)),
+          'X-RateLimit-Limit': String(rl.limit),
+          'X-RateLimit-Remaining': '0',
+        },
+      }
+    )
+  }
+
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ error: 'AI service not configured' }, { status: 503 })
   }
