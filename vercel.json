@@ -3,7 +3,6 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install",
   "outputDirectory": ".next",
-  "nodeVersion": "22.x",
   "headers": [
     {
       "source": "/sw.js",
