@@ -11,11 +11,6 @@ export default function LoginPage() {
         <p className="text-sm mt-1" style={{ color: '#5C5C5C' }}>Sign in to continue to NYAAY</p>
       </div>
       <OAuthButtons />
-      <div className="relative flex items-center gap-3">
-        <div className="flex-1 h-px" style={{ backgroundColor: '#E5E7EB' }} />
-        <span className="text-xs" style={{ color: '#9CA3AF' }}>or sign in with email</span>
-        <div className="flex-1 h-px" style={{ backgroundColor: '#E5E7EB' }} />
-      </div>
       <LoginForm />
       <div className="relative flex items-center gap-3">
         <div className="flex-1 h-px" style={{ backgroundColor: '#E5E7EB' }} />

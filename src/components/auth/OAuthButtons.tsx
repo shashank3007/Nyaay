@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { signInWithGoogle } from '@/lib/supabase/auth'
 
+const GOOGLE_OAUTH_ENABLED = process.env.NEXT_PUBLIC_GOOGLE_OAUTH_ENABLED === 'true'
+
 export function OAuthButtons() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -12,6 +14,8 @@ export function OAuthButtons() {
     const { error } = await signInWithGoogle()
     if (error) { setError(error.message); setLoading(false) }
   }
+
+  if (!GOOGLE_OAUTH_ENABLED) return null
 
   return (
     <div className="space-y-3">
