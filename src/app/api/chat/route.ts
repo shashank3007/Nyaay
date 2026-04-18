@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getAnthropicClient, DEFAULT_MODEL, MAX_TOKENS } from '@/lib/anthropic/client'
 import { buildSystemPrompt } from '@/lib/anthropic/systemPrompt'
 import { detectDomain, detectIntent } from '@/lib/anthropic/detect'
+import { getLegalContext, formatContextBlock } from '@/lib/indiacode/client'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { rateLimit, getRequestIdentifier } from '@/lib/rateLimit'
 import type { SupportedLanguage } from '@/types'
@@ -79,6 +80,11 @@ export async function POST(req: NextRequest) {
 
   anthropicMessages.push({ role: 'user', content: message })
 
+  // ── Fetch India Code legal context (non-blocking, 4s timeout) ──
+  const domain = detectDomain(message)
+  const legalCtx = await getLegalContext(domain, message).catch(() => null)
+  const ctxBlock = legalCtx ? formatContextBlock(legalCtx) : ''
+
   // ── SSE stream ───────────────────────────────────────────
   const encoder = new TextEncoder()
 
@@ -92,10 +98,14 @@ export async function POST(req: NextRequest) {
         const client = getAnthropicClient()
         let fullContent = ''
 
+        const systemPrompt = ctxBlock
+          ? `${buildSystemPrompt(language)}\n\n${ctxBlock}`
+          : buildSystemPrompt(language)
+
         const stream = client.messages.stream({
           model: DEFAULT_MODEL,
           max_tokens: MAX_TOKENS,
-          system: buildSystemPrompt(language),
+          system: systemPrompt,
           messages: anthropicMessages,
         })
 
