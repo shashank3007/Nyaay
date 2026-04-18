@@ -38,6 +38,8 @@ export interface Database {
           preferred_language: SupportedLanguage
           avatar_url: string | null
           is_premium: boolean
+          monthly_tokens_used: number
+          tokens_month: string
           created_at: string
           updated_at: string
         }
@@ -49,6 +51,8 @@ export interface Database {
           preferred_language?: SupportedLanguage
           avatar_url?: string | null
           is_premium?: boolean
+          monthly_tokens_used?: number
+          tokens_month?: string
           created_at?: string
           updated_at?: string
         }
@@ -60,6 +64,8 @@ export interface Database {
           preferred_language?: SupportedLanguage
           avatar_url?: string | null
           is_premium?: boolean
+          monthly_tokens_used?: number
+          tokens_month?: string
           updated_at?: string
         }
         Relationships: []

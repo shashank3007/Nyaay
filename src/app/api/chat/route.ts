@@ -3,6 +3,7 @@ import { getAnthropicClient, DEFAULT_MODEL, MAX_TOKENS } from '@/lib/anthropic/c
 import { buildSystemPrompt } from '@/lib/anthropic/systemPrompt'
 import { detectDomain, detectIntent } from '@/lib/anthropic/detect'
 import { getLegalContext, formatContextBlock } from '@/lib/indiacode/client'
+import { checkTokenLimit, incrementTokenUsage, FREE_MONTHLY_LIMIT } from '@/lib/tokenLimiter'
 import { createClient as createServerClient } from '@/lib/supabase/server'
 import { rateLimit, getRequestIdentifier } from '@/lib/rateLimit'
 import type { SupportedLanguage } from '@/types'
@@ -12,7 +13,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 const CHAT_RATE_LIMIT = { limit: 20, windowSec: 60 }
 
 export async function POST(req: NextRequest) {
-  // Rate limiting
+  // ── IP rate limit ────────────────────────────────────────────
   const id = getRequestIdentifier(req)
   const rl = rateLimit(`chat:${id}`, CHAT_RATE_LIMIT)
   if (!rl.success) {
@@ -46,13 +47,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 })
   }
 
-  const { message, language = 'hi', conversationId, userId: _userId } = body
+  const { message, language = 'hi', conversationId, userId } = body
 
   if (!message?.trim()) {
     return NextResponse.json({ error: 'Message is required' }, { status: 400 })
   }
 
-  // ── Load conversation history from Supabase ──────────────────
+  // ── Per-user monthly token limit ─────────────────────────────
+  if (userId) {
+    const tokenCheck = await checkTokenLimit(userId).catch(() => null)
+    if (tokenCheck && !tokenCheck.allowed) {
+      return NextResponse.json(
+        {
+          error: 'Monthly limit reached',
+          message: `You have used your ${FREE_MONTHLY_LIMIT.toLocaleString()} free tokens for this month. Your limit resets on the 1st of next month.`,
+          used: tokenCheck.used,
+          limit: tokenCheck.limit,
+          upgradeAvailable: true,
+        },
+        { status: 429 }
+      )
+    }
+  }
+
+  // ── Load conversation history ────────────────────────────────
   const anthropicMessages: Anthropic.MessageParam[] = []
 
   if (conversationId) {
@@ -74,18 +92,17 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       console.error('[chat] history fetch error:', err)
-      // Non-fatal — proceed without history
     }
   }
 
   anthropicMessages.push({ role: 'user', content: message })
 
-  // ── Fetch India Code legal context (non-blocking, 4s timeout) ──
+  // ── Indian Kanoon legal context (non-blocking, 5s timeout) ───
   const domain = detectDomain(message)
   const legalCtx = await getLegalContext(domain, message).catch(() => null)
   const ctxBlock = legalCtx ? formatContextBlock(legalCtx) : ''
 
-  // ── SSE stream ───────────────────────────────────────────
+  // ── SSE stream ───────────────────────────────────────────────
   const encoder = new TextEncoder()
 
   const readable = new ReadableStream({
@@ -123,6 +140,13 @@ export async function POST(req: NextRequest) {
         const finalMsg = await stream.finalMessage()
         const tokensUsed = finalMsg.usage.input_tokens + finalMsg.usage.output_tokens
 
+        // Persist token usage (non-blocking, non-fatal)
+        if (userId) {
+          incrementTokenUsage(userId, tokensUsed).catch((err) =>
+            console.error('[chat] token increment error:', err)
+          )
+        }
+
         send({
           type: 'done',
           content: fullContent,
@@ -148,7 +172,7 @@ export async function POST(req: NextRequest) {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       Connection: 'keep-alive',
-      'X-Accel-Buffering': 'no', // disable Nginx proxy buffering
+      'X-Accel-Buffering': 'no',
     },
   })
 }

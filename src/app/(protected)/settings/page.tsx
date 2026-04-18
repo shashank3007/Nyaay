@@ -1,14 +1,15 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { User, Bell, Volume2, Shield, LogOut } from 'lucide-react'
+import { User, Bell, Volume2, Shield, LogOut, Zap } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useUserStore } from '@/stores/userStore'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { Avatar } from '@/components/ui/Avatar'
 import { LanguageSelector } from '@/components/ui/Dropdown'
+import { FREE_MONTHLY_LIMIT, PREMIUM_MONTHLY_LIMIT } from '@/lib/tokenLimits'
 import type { SupportedLanguage } from '@/types'
 
 export default function SettingsPage() {
@@ -18,6 +19,24 @@ export default function SettingsPage() {
   const [fullName, setFullName]     = useState(user?.full_name ?? '')
   const [isSaving, setIsSaving]     = useState(false)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle')
+  const [tokensUsed, setTokensUsed] = useState(0)
+  const [tokensMonth, setTokensMonth] = useState('')
+
+  useEffect(() => {
+    if (!user) return
+    const supabase = createClient()
+    supabase
+      .from('profiles')
+      .select('monthly_tokens_used, tokens_month')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) {
+          setTokensUsed(data.monthly_tokens_used ?? 0)
+          setTokensMonth(data.tokens_month ?? '')
+        }
+      })
+  }, [user])
 
   async function handleSaveProfile() {
     if (!user) return
@@ -140,6 +159,16 @@ export default function SettingsPage() {
           </div>
         </Section>
 
+        {/* ── Usage ───────────────────────────────── */}
+        <Section icon={<Zap className="w-5 h-5" style={{ color: '#2C5530' }} />} title="Monthly Usage">
+          <UsageMeter
+            used={tokensUsed}
+            limit={user?.is_premium ? PREMIUM_MONTHLY_LIMIT : FREE_MONTHLY_LIMIT}
+            isPremium={user?.is_premium ?? false}
+            month={tokensMonth}
+          />
+        </Section>
+
         {/* ── Account ─────────────────────────────── */}
         <Section icon={<Shield className="w-5 h-5" style={{ color: '#2C5530' }} />} title="Account">
           <div className="space-y-4">
@@ -185,6 +214,67 @@ function Section({ icon, title, children }: { icon: React.ReactNode; title: stri
       </div>
       {children}
     </section>
+  )
+}
+
+function UsageMeter({ used, limit, isPremium, month }: {
+  used: number; limit: number; isPremium: boolean; month: string
+}) {
+  const pct = Math.min(100, Math.round((used / limit) * 100))
+  const remaining = Math.max(0, limit - used)
+  const barColor = pct >= 90 ? '#EF4444' : pct >= 70 ? '#F59E0B' : '#2C5530'
+  const resetLabel = month
+    ? (() => {
+        const [y, m] = month.split('-').map(Number)
+        const next = new Date(y, m, 1)
+        return next.toLocaleDateString('en-IN', { month: 'long', day: 'numeric', year: 'numeric' })
+      })()
+    : '—'
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-end justify-between">
+        <div>
+          <p className="text-2xl font-bold" style={{ color: '#1A1A1A' }}>
+            {used.toLocaleString()}
+            <span className="text-sm font-normal ml-1" style={{ color: '#9CA3AF' }}>
+              / {limit.toLocaleString()} tokens
+            </span>
+          </p>
+          <p className="text-xs mt-0.5" style={{ color: '#9CA3AF' }}>
+            {remaining.toLocaleString()} remaining · resets {resetLabel}
+          </p>
+        </div>
+        <span
+          className="text-xs px-2.5 py-1 rounded-full font-medium"
+          style={isPremium
+            ? { backgroundColor: '#FEF3C7', color: '#92400E' }
+            : { backgroundColor: '#E8F5E9', color: '#2C5530' }}
+        >
+          {isPremium ? 'Premium' : 'Free'}
+        </span>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: '#E5E7EB' }}>
+        <div
+          className="h-full rounded-full transition-all duration-500"
+          style={{ width: `${pct}%`, backgroundColor: barColor }}
+        />
+      </div>
+
+      {pct >= 90 && !isPremium && (
+        <p className="text-sm rounded-xl px-4 py-3" style={{ backgroundColor: '#FEF2F2', color: '#DC2626' }}>
+          You are close to your monthly limit. Upgrade to Premium for 10× more tokens.
+        </p>
+      )}
+
+      {!isPremium && (
+        <p className="text-xs" style={{ color: '#9CA3AF' }}>
+          Free plan: {(FREE_MONTHLY_LIMIT).toLocaleString()} tokens/month · ~62 conversations
+        </p>
+      )}
+    </div>
   )
 }
 
